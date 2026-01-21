@@ -35,9 +35,6 @@ logs/
 
 # Downloaded pay slips (temporary)
 downloads/
-
-# Archived pay slips (local backup - optional to commit)
-payslips_archive/
 *.pdf
 
 # IDE

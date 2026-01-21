@@ -132,7 +132,7 @@ def create_folders():
     """Create necessary folders"""
     print_step(5, "Creating folders...")
     
-    folders = ['downloads', 'logs', 'payslips_archive']
+    folders = ['downloads', 'logs']
     
     for folder in folders:
         Path(folder).mkdir(exist_ok=True)
