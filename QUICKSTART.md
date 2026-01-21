@@ -1,103 +1,128 @@
-# Quick Setup Guide for Employees
+# Quick Start - Payslip Drive Sync
 
-**Time needed**: ~15 minutes | **Technical level**: Beginner-friendly
+Get your payslips automatically synced to Google Drive in 4 simple steps.
 
-## ✅ Checklist
+## ⚡ 4-Step Setup (15 minutes)
 
-- [ ] Python 3.8+ installed
-- [ ] Google Chrome installed
-- [ ] Paybooks account credentials ready
-- [ ] Personal Gmail account for Google Drive
+### Step 1: Create Google Cloud Project (5 minutes)
 
-## 🚀 5-Step Setup
+**Important**: Each person creates their own project to avoid API quota issues.
 
-### Step 1: Download the Code (2 min)
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Click project dropdown → "NEW PROJECT"
+3. Name: `Payslip Sync` → CREATE
+4. Search for "Google Drive API" → ENABLE
+5. Create credentials:
+   - "CREATE CREDENTIALS" → "OAuth client ID"
+   - Configure consent screen if prompted:
+     - External → App name: `Payslip Sync`
+     - Scopes: Add `.../auth/drive.file`
+     - Test users: Add your email
+   - Application type: **Desktop app**
+   - DOWNLOAD JSON → Save as `credentials.json`
 
-```powershell
-# Open PowerShell and run:
-cd C:\Users\YourName\Documents  # or your preferred location
-git clone https://github.com/Shamanthkrishna/payslip-drive-sync.git
-cd payslip-drive-sync
+📖 **Need detailed steps?** See [README.md - Setting Up Google Cloud Project](README.md#setting-up-your-google-cloud-project-step-by-step)
+
+### Step 2: Run Setup Script (5 minutes)
+
+```bash
+python setup.py
 ```
 
-**No Git installed?** [Download Git](https://git-scm.com/download/win) or download ZIP from GitHub.
+The script will:
+- ✅ Check Python version
+- ✅ Install dependencies
+- ✅ Collect your Paybooks credentials
+- ✅ Guide you through Google Drive authentication
 
-### Step 2: Install Python Packages (3 min)
+### Step 3: Complete Google Drive Authentication (2 minutes)
 
-```powershell
-# Install required packages
-pip install -r requirements.txt
+When the browser opens:
+1. Sign in with your Google account
+2. Click "Allow" to grant Drive access
+3. Close the browser window
+
+### Step 4: Sync Your Payslips
+
+```bash
+python sync_payslips.py
 ```
 
-**Seeing errors?** Make sure Python is installed: `python --version`
+**First run**: Downloads all missing payslips (last 24 months)  
+**Future runs**: Downloads only new/missing months
 
-### Step 3: Configure YOUR Credentials (3 min)
+## ✅ That's It!
 
-```powershell
-# Create your personal config file
-Copy-Item .env.example .env
-
-# Open .env file and update with YOUR information:
-notepad .env
+Your payslips are now on Google Drive at:
+```
+Pay Slips/
+  └── 2024/
+      ├── January/
+      │   └── payslip_0124.pdf
+      ├── February/
+      │   └── payslip_0224.pdf
+      └── ...
 ```
 
-**What to update in `.env`**:
-- `PAYBOOKS_LOGIN_ID` → Your employee ID (e.g., 1234567)
-- `PAYBOOKS_PASSWORD` → Your Paybooks password
-- `PAYBOOKS_DOMAIN` → Your company domain (e.g., TISMO)
-- `EMAIL_SENDER` → Your personal Gmail
-- `EMAIL_RECIPIENT` → Your work email (for notifications)
+Local backups are in the `local_payslips/` folder.
 
-**Don't update `EMAIL_PASSWORD` yet** - we'll do this in Step 4.
+## 🔄 Run Monthly
 
-### Step 4: Setup Google Drive Access (5 min)
-
-#### A. Enable Google Drive API
-1. Visit [Google Cloud Console](https://console.cloud.google.com/)
-2. Create new project: "Payslip Automation"
-3. Enable "Google Drive API"
-4. Create OAuth 2.0 credentials (Desktop app)
-5. Download as `credentials.json` → Save in project folder
-
-#### B. Setup Gmail App Password
-1. Go to [Google Account Security](https://myaccount.google.com/security)
-2. Enable "2-Step Verification"
-3. Create "App Password" for "Mail"
-4. Copy the 16-character password
-5. Add to `.env` as `EMAIL_PASSWORD`
-
-**Detailed instructions**: See [README.md](README.md#step-3-setup-google-drive-api)
-
-### Step 5: Test Everything (2 min)
-
-```powershell
-# Run the automation once
-python main.py
+### Option 1: Manual (Easiest)
+Run this command on the 5th of each month:
+```bash
+python sync_payslips.py
 ```
 
-**What happens**:
-1. Browser opens (or runs hidden)
-2. Logs into Paybooks
-3. Downloads previous month's pay slip
-4. Asks for Google Drive permission (first time only)
-5. Uploads to your Google Drive
-6. Sends you an email
+### Option 2: Windows Task Scheduler (Automated)
+1. Press `Win + R`, type `taskschd.msc`
+2. Create Basic Task → Name: "Payslip Sync"
+3. Trigger: Monthly, Day 5
+4. Action: Start a program
+   - Program: `python.exe` (full path, e.g., `C:\Python\python.exe`)
+   - Arguments: `sync_payslips.py`
+   - Start in: Your project folder path
 
-**Success?** Check your Google Drive: `Pay Slips/YYYY/Month_Name/`
+### Option 3: Linux/Mac (cron)
+```bash
+# Run on 5th of each month at 9 AM
+0 9 5 * * cd /path/to/project && python3 sync_payslips.py
+```
 
-## 📅 Schedule Monthly Run
+## ❓ Troubleshooting
 
-### Option A: Simple Task Scheduler (Recommended)
+**Chrome doesn't open?**
+- Make sure Chrome is installed
+- Close all Chrome windows and try again
 
-1. Create `run_payslip_automation.bat` in project folder:
-   ```batch
-   @echo off
-   cd /d "%~dp0"
-   python main.py >> logs\scheduler.log 2>&1
-   ```
+**"Token expired" error?**
+- Delete `.paybooks_token` file
+- Run `python sync_payslips.py` again
 
-2. Press `Win + R`, type `taskschd.msc`, press Enter
-3. Click "Create Basic Task"
+**Google Drive auth fails?**
+- Delete `token.json`
+- Run the sync again
+- Complete the Google authentication in browser
+
+**Missing payslips not downloading?**
+- Check the console output for which months were detected
+- Ensure Drive folders follow: `Pay Slips/YYYY/MonthName/`
+
+See [README.md](README.md) for detailed documentation.
+
+## 📁 What Each File Does
+
+- `sync_payslips.py` - Main script (run this monthly)
+- `setup.py` - First-time setup wizard
+- `paybooks_api.py` - Handles Paybooks API
+- `drive_uploader.py` - Uploads to Google Drive
+- `.env` - Your credentials (never share!)
+- `credentials.json` - Google app ID (shared with team)
+- `token.json` - Your Google Drive access (auto-generated)
+
+## 🔒 Security
+
+Your `.env` file contains sensitive credentials - it's automatically excluded from Git. Never share it with anyone!
 4. Name: `Payslip Automation`
 5. Trigger: Monthly, Day 5, All months
 6. Action: Start a program

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Pay Slip Automation - Main Script
+Pay Slip Automation - Main Script (API-Based)
 
 Automates downloading pay slips from Paybooks portal and uploading to Google Drive.
+Uses fast API calls instead of Selenium web scraping.
 Designed to run monthly via Windows Task Scheduler.
 """
 
@@ -15,7 +16,7 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from config import Config
-from paybooks_scraper import PaybooksScraper
+from paybooks_api import PaybooksAPI
 from drive_uploader import DriveUploader
 from email_notifier import EmailNotifier
 
@@ -57,14 +58,26 @@ def get_previous_month():
     return datetime.now() - relativedelta(months=1)
 
 
-def cleanup_download(file_path):
-    """Delete the downloaded file from local storage"""
+def cleanup_download(file_path, previous_month):
+    """Rename and keep the downloaded file in local storage"""
     try:
         if file_path and Path(file_path).exists():
-            Path(file_path).unlink()
-            logging.getLogger(__name__).info(f"Cleaned up local file: {file_path}")
+            # Create archive folder
+            archive_folder = Config.BASE_DIR / 'payslips_archive'
+            archive_folder.mkdir(exist_ok=True)
+            
+            # Create filename: payslip_MMYY (e.g., payslip_1225 for Dec 2025)
+            month_year = previous_month.strftime('%m%y')
+            new_filename = f"payslip_{month_year}.pdf"
+            new_path = archive_folder / new_filename
+            
+            # Move and rename file
+            import shutil
+            shutil.move(str(file_path), str(new_path))
+            logging.getLogger(__name__).info(f"Payslip archived to: {new_path}")
+            return new_path
     except Exception as e:
-        logging.getLogger(__name__).warning(f"Failed to cleanup file: {e}")
+        logging.getLogger(__name__).warning(f"Failed to archive file: {e}")
 
 
 def main():
@@ -86,11 +99,11 @@ def main():
         
         # Step 1: Download from Paybooks
         logger.info("-"*70)
-        logger.info("STEP 1: Downloading pay slip from Paybooks")
+        logger.info("STEP 1: Downloading pay slip from Paybooks API")
         logger.info("-"*70)
         
-        scraper = PaybooksScraper()
-        downloaded_file = scraper.download_latest_payslip()
+        api_client = PaybooksAPI()
+        downloaded_file = api_client.download_latest_payslip()
         
         if not downloaded_file or not downloaded_file.exists():
             raise Exception("Pay slip download failed - file not found")
@@ -146,9 +159,9 @@ def main():
         return 1  # Failure
         
     finally:
-        # Cleanup downloaded file
+        # Archive downloaded file locally
         if downloaded_file:
-            cleanup_download(downloaded_file)
+            cleanup_download(downloaded_file, previous_month)
         
         logger.info("Script execution finished")
 
