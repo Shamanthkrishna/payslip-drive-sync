@@ -19,10 +19,10 @@ from src.drive_uploader import DriveUploader
 
 
 def setup_logging():
-    """Configure logging"""
+    """Configure logging - one log file per day"""
     Config.create_folders()
     
-    log_file = Config.LOG_FOLDER / f"sync_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    log_file = Config.LOG_FOLDER / f"payslip_{datetime.now().strftime('%Y%m%d')}.log"
     
     logging.basicConfig(
         level=logging.INFO,
@@ -110,6 +110,20 @@ def sync_all_payslips(max_months=24):
     
     try:
         Config.validate()
+        
+        # Check if token exists before starting
+        if not Path('.paybooks_token').exists():
+            logger.warning("No token found!")
+            print("\n" + "="*70)
+            print("TOKEN REQUIRED")
+            print("="*70)
+            print("\nNo authentication token found.")
+            print("\nTo get your token:")
+            print("1. Run: python paste_token.py")
+            print("2. Follow the instructions to extract token from browser")
+            print("\nThis only needs to be done once per day (token lasts 24h)")
+            print("="*70 + "\n")
+            return
         
         logger.info("="*70)
         logger.info("SMART PAYSLIP SYNC - PRODUCTION VERSION")

@@ -8,25 +8,29 @@ Automatically download payslips from Paybooks and upload to Google Drive with ze
 # 1. First-time setup (one command)
 python setup.py
 
-# 2. Sync payslips (run monthly or anytime)
+# 2. Get authentication token (once per day)
+python paste_token.py
+# Follow the on-screen instructions to get token from browser
+
+# 3. Sync payslips (run monthly or anytime)
 python sync_payslips.py
 ```
 
 That's it! The tool will:
 - **First run**: Download ALL missing payslips from your employment start date
 - **Subsequent runs**: Check your Drive and download only missing months
-- **Auto-upload**: Organize in Drive as `Pay Slips/YYYY/MonthName/payslip_MMYY.pdf`
-- **Local backup**: Keep copies in `local_payslips/` folder
+- **Auto-upload**: Organize in Drive as `Pay Slips/YYYY/MonthName/`
+- **Token**: Lasts 24 hours, re-run `paste_token.py` when expired
 
 ## Features
 
-✅ **Zero Manual Steps**: Automatic token extraction from browser  
+✅ **Simple Token Setup**: One-time daily token paste (instructions provided)  
 ✅ **Smart Sync**: Scans Drive, downloads only missing payslips  
 ✅ **Bulk Initial Download**: Gets all historical payslips on first run  
 ✅ **Fast API**: 10x faster than web scraping (~1 sec per payslip)  
 ✅ **Auto-Organization**: Year/Month folder structure on Drive  
 ✅ **Duplicate Prevention**: Never downloads the same payslip twice  
-✅ **Token Caching**: Authentication token valid for 24 hours  
+✅ **Daily Logging**: All runs logged to single daily file  
 
 ## Installation
 

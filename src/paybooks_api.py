@@ -66,38 +66,43 @@ class PaybooksAPI:
             logger.warning(f"Could not save token: {e}")
     
     def get_login_token_via_browser(self):
-        """Use Selenium to login and extract the LoginToken"""
+        """Use Selenium to login and extract the LoginToken automatically"""
         logger.info("Logging in to extract API token...")
         
         driver = None
         try:
-            # Setup Chrome in headless mode
+            # Setup Chrome in headless mode for automatic extraction
             chrome_options = Options()
             chrome_options.add_argument('--headless=new')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--disable-gpu')
             chrome_options.add_argument('--log-level=3')
-            chrome_options.add_argument('--disable-logging')
             chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
             
             # Enable performance logging to capture network requests
             chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
             
             driver = webdriver.Chrome(options=chrome_options)
-            driver.set_page_load_timeout(20)
+            driver.set_page_load_timeout(30)
             
             # Navigate and login
             logger.info(f"Navigating to {Config.PAYBOOKS_URL}")
             driver.get(Config.PAYBOOKS_URL)
             
-            wait = WebDriverWait(driver, 15)
+            wait = WebDriverWait(driver, 20)
             time.sleep(2)
             
-            # Fill login form
-            login_field = wait.until(
-                EC.presence_of_element_located((By.XPATH, "//input[@placeholder='User ID' or @placeholder='Login ID' or @type='text']"))
-            )
+            # Fill login form - try multiple field name variations
+            try:
+                login_field = wait.until(
+                    EC.presence_of_element_located((By.ID, "txtUserName"))
+                )
+            except:
+                try:
+                    login_field = driver.find_element(By.XPATH, "//input[@placeholder='User ID' or @placeholder='Login ID']")
+                except:
+                    login_field = driver.find_element(By.XPATH, "//input[@type='text']")
+            
             login_field.clear()
             login_field.send_keys(Config.PAYBOOKS_LOGIN_ID)
             
@@ -105,18 +110,82 @@ class PaybooksAPI:
             password_field.clear()
             password_field.send_keys(Config.PAYBOOKS_PASSWORD)
             
-            domain_field = driver.find_element(By.ID, "txtDomain")
+            # Try different domain field IDs
+            try:
+                domain_field = driver.find_element(By.ID, "txtDomainId")
+            except:
+                try:
+                    domain_field = driver.find_element(By.ID, "txtDomain")
+                except:
+                    domain_field = driver.find_element(By.XPATH, "//input[@placeholder='Domain' or @placeholder='Company']")
+            
             domain_field.clear()
             domain_field.send_keys(Config.PAYBOOKS_DOMAIN)
             
-            login_button = driver.find_element(By.ID, "btnLogin")
+            # Try different login button selectors
+            try:
+                login_button = driver.find_element(By.ID, "btnLogin")
+            except:
+                try:
+                    login_button = driver.find_element(By.XPATH, "//button[contains(@ng-click, 'userLogin')]")
+                except:
+                    login_button = driver.find_element(By.XPATH, "//button[@type='submit' or text()='Login' or text()='Sign In']")
+            
             login_button.click()
             
             # Wait for login
-            wait.until(EC.url_changes(Config.PAYBOOKS_URL))
-            time.sleep(3)
+            time.sleep(5)
             
             logger.info("Login successful, extracting token...")
+            
+            # IMPORTANT: Make an actual API call to trigger the request we need to intercept
+            # This is more reliable than clicking UI elements
+            try:
+                # Clear performance logs
+                driver.get_log('performance')
+                
+                # Execute JavaScript to make the API call directly
+                logger.info("Triggering payslip API call...")
+                current_month = datetime.now().replace(day=1)
+                month_str = current_month.strftime("%d-%m-%Y")
+                
+                # Inject JavaScript to call the API (this will use the session token)
+                script = f"""
+                // Try to find and use existing angular/paybooks API function
+                var month = '{month_str}';
+                
+                // Method 1: Try to call existing payslip function
+                if (typeof downloadPayslip !== 'undefined') {{
+                    downloadPayslip(month);
+                }} else if (typeof viewPayslip !== 'undefined') {{
+                    viewPayslip(month);
+                }} else {{
+                    // Method 2: Make direct fetch/xhr call
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', 'https://apislip.paybooks.in/Payslip/PayslipDownload', true);
+                    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                    
+                    // Get token from storage if available
+                    var token = localStorage.getItem('LoginToken') || sessionStorage.getItem('LoginToken');
+                    if (token) {{
+                        var payload = {{
+                            PayslipMonth: month,
+                            LoginToken: token,
+                            IsMailRequest: false,
+                            IsSendMail: false
+                        }};
+                        var encoded = btoa(JSON.stringify(payload));
+                        xhr.send('requestData=' + encodeURIComponent(encoded));
+                    }}
+                }}
+                return true;
+                """
+                
+                driver.execute_script(script)
+                time.sleep(3)  # Wait for API call
+                
+            except Exception as e:
+                logger.debug(f"Direct API call failed: {e}")
             
             # Method 1: Try localStorage
             try:
@@ -227,11 +296,11 @@ class PaybooksAPI:
             logger.error("Could not automatically extract token")
             logger.info("Manual extraction required:")
             logger.info("1. Open browser and login to Paybooks")
-            logger.info("2. Open DevTools (F12) → Network tab")
+            logger.info("2. Open DevTools (F12) -> Network tab")
             logger.info("3. Click on a payslip")
             logger.info("4. Look for 'PayslipDownload' request")
             logger.info("5. Copy the LoginToken from the request payload")
-            logger.info("6. Save it in .paybooks_token file as: {\"token\": \"YOUR_TOKEN\", \"timestamp\": \"2026-01-21T00:00:00\"}")
+            logger.info("6. Save it in .paybooks_token file")
             
             raise Exception("Failed to extract LoginToken - manual extraction required")
             
