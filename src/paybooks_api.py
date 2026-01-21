@@ -138,171 +138,107 @@ class PaybooksAPI:
             
             logger.info("Login successful, extracting token...")
             
-            # IMPORTANT: Make an actual API call to trigger the request we need to intercept
-            # This is more reliable than clicking UI elements
+            # Method 1: Check sessionStorage.userInfo for tokenKey (PRIMARY METHOD)
             try:
-                # Clear performance logs
-                driver.get_log('performance')
-                
-                # Execute JavaScript to make the API call directly
-                logger.info("Triggering payslip API call...")
-                current_month = datetime.now().replace(day=1)
-                month_str = current_month.strftime("%d-%m-%Y")
-                
-                # Inject JavaScript to call the API (this will use the session token)
-                script = f"""
-                // Try to find and use existing angular/paybooks API function
-                var month = '{month_str}';
-                
-                // Method 1: Try to call existing payslip function
-                if (typeof downloadPayslip !== 'undefined') {{
-                    downloadPayslip(month);
-                }} else if (typeof viewPayslip !== 'undefined') {{
-                    viewPayslip(month);
-                }} else {{
-                    // Method 2: Make direct fetch/xhr call
-                    var xhr = new XMLHttpRequest();
-                    xhr.open('POST', 'https://apislip.paybooks.in/Payslip/PayslipDownload', true);
-                    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-                    
-                    // Get token from storage if available
-                    var token = localStorage.getItem('LoginToken') || sessionStorage.getItem('LoginToken');
-                    if (token) {{
-                        var payload = {{
-                            PayslipMonth: month,
-                            LoginToken: token,
-                            IsMailRequest: false,
-                            IsSendMail: false
-                        }};
-                        var encoded = btoa(JSON.stringify(payload));
-                        xhr.send('requestData=' + encodeURIComponent(encoded));
-                    }}
-                }}
-                return true;
-                """
-                
-                driver.execute_script(script)
-                time.sleep(3)  # Wait for API call
-                
+                user_info = driver.execute_script("return sessionStorage.getItem('userInfo');")
+                if user_info:
+                    import json
+                    user_data = json.loads(user_info)
+                    token = user_data.get('tokenKey')
+                    if token:
+                        logger.info("✅ Extracted token from sessionStorage.userInfo.tokenKey")
+                        return token
             except Exception as e:
-                logger.debug(f"Direct API call failed: {e}")
+                logger.debug(f"sessionStorage.userInfo failed: {e}")
             
-            # Method 1: Try localStorage
+            # Method 2: Check localStorage first
             try:
-                script = """
-                var token = localStorage.getItem('LoginToken');
-                if (!token) {
-                    var keys = Object.keys(localStorage);
-                    for (var i = 0; i < keys.length; i++) {
-                        if (keys[i].toLowerCase().indexOf('token') !== -1) {
-                            token = localStorage.getItem(keys[i]);
-                            break;
-                        }
-                    }
-                }
-                return token;
-                """
-                token = driver.execute_script(script)
+                token = driver.execute_script("return localStorage.getItem('LoginToken');")
                 if token:
                     logger.info("✅ Extracted token from localStorage")
                     return token
             except Exception as e:
-                logger.debug(f"localStorage attempt failed: {e}")
+                logger.debug(f"localStorage failed: {e}")
             
-            # Method 2: Try sessionStorage
+            # Method 2: Check sessionStorage
+            try:
+                token = driver.execute_script("return sessionStorage.getItem('LoginToken');")
+                if token:
+                    logger.info("Extracted token from sessionStorage")
+                    return token
+            except Exception as e:
+                logger.debug(f"sessionStorage failed: {e}")
+            
+            # Method 3: Try to get from Angular scope (Paybooks uses AngularJS)
             try:
                 script = """
-                var token = sessionStorage.getItem('LoginToken');
-                if (!token) {
-                    var keys = Object.keys(sessionStorage);
-                    for (var i = 0; i < keys.length; i++) {
-                        if (keys[i].toLowerCase().indexOf('token') !== -1) {
-                            token = sessionStorage.getItem(keys[i]);
-                            break;
+                var token = null;
+                try {
+                    // Try to get from angular scope
+                    var scope = angular.element(document.body).scope();
+                    if (scope && scope.LoginToken) {
+                        token = scope.LoginToken;
+                    } else if (scope && scope.$root && scope.$root.LoginToken) {
+                        token = scope.$root.LoginToken;
+                    }
+                    
+                    // Try localStorage with all keys
+                    if (!token) {
+                        for (var i = 0; i < localStorage.length; i++) {
+                            var key = localStorage.key(i);
+                            if (key && key.toLowerCase().includes('token')) {
+                                token = localStorage.getItem(key);
+                                if (token && token.length > 20) break;
+                            }
                         }
                     }
-                }
+                    
+                    // Try sessionStorage with all keys
+                    if (!token) {
+                        for (var i = 0; i < sessionStorage.length; i++) {
+                            var key = sessionStorage.key(i);
+                            if (key && key.toLowerCase().includes('token')) {
+                                token = sessionStorage.getItem(key);
+                                if (token && token.length > 20) break;
+                            }
+                        }
+                    }
+                } catch(e) {}
                 return token;
                 """
                 token = driver.execute_script(script)
                 if token:
-                    logger.info("✅ Extracted token from sessionStorage")
+                    logger.info("Extracted token from Angular scope")
                     return token
             except Exception as e:
-                logger.debug(f"sessionStorage attempt failed: {e}")
+                logger.debug(f"Angular scope failed: {e}")
             
-            # Method 3: Trigger payslip view and check network logs
+            # Method 4: Navigate to payslip page and check again
             try:
-                payslip_btn = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, "//div[contains(@ng-click, 'viewPayslip')]"))
-                )
+                logger.info("Navigating to payslip page...")
+                driver.get("https://apps.paybooks.in/#!/payslip")
+                time.sleep(3)
                 
-                # Clear existing logs
-                driver.get_log('performance')
-                
-                payslip_btn.click()
-                time.sleep(3)  # Wait for API call
-                
-                # Check performance logs for network requests
-                logs = driver.get_log('performance')
-                for entry in logs:
-                    try:
-                        log = json.loads(entry['message'])['message']
-                        
-                        # Look for the API response
-                        if log['method'] == 'Network.responseReceived':
-                            response = log['params'].get('response', {})
-                            if 'PayslipDownload' in response.get('url', ''):
-                                # Found the response, now get the request
-                                request_id = log['params'].get('requestId')
-                                
-                                # Find corresponding request
-                                for req_entry in logs:
-                                    try:
-                                        req_log = json.loads(req_entry['message'])['message']
-                                        if req_log['method'] == 'Network.requestWillBeSent':
-                                            if req_log['params'].get('requestId') == request_id:
-                                                post_data = req_log['params'].get('request', {}).get('postData', '')
-                                                if 'requestData=' in post_data:
-                                                    b64_data = post_data.split('requestData=')[-1]
-                                                    # URL decode if needed
-                                                    from urllib.parse import unquote
-                                                    b64_data = unquote(b64_data)
-                                                    decoded = base64.b64decode(b64_data).decode('utf-8')
-                                                    payload = json.loads(decoded)
-                                                    token = payload.get('LoginToken')
-                                                    if token:
-                                                        logger.info("✅ Extracted token from API request")
-                                                        return token
-                                    except:
-                                        continue
-                    except:
-                        continue
-                        
+                token = driver.execute_script("return localStorage.getItem('LoginToken') || sessionStorage.getItem('LoginToken');")
+                if token:
+                    logger.info("Extracted token after navigation")
+                    return token
             except Exception as e:
-                logger.debug(f"Network log attempt failed: {e}")
+                logger.debug(f"Navigation attempt failed: {e}")
             
-            # Method 4: Check cookies
+            # Method 5: Check all cookies
             try:
                 cookies = driver.get_cookies()
                 for cookie in cookies:
-                    if 'token' in cookie['name'].lower():
-                        logger.info(f"✅ Found token in cookie: {cookie['name']}")
+                    if 'token' in cookie['name'].lower() and len(cookie['value']) > 20:
+                        logger.info(f"Extracted token from cookie: {cookie['name']}")
                         return cookie['value']
             except Exception as e:
-                logger.debug(f"Cookie attempt failed: {e}")
+                logger.debug(f"Cookie check failed: {e}")
             
-            # If all methods fail, provide instructions
+            # If all methods fail
             logger.error("Could not automatically extract token")
-            logger.info("Manual extraction required:")
-            logger.info("1. Open browser and login to Paybooks")
-            logger.info("2. Open DevTools (F12) -> Network tab")
-            logger.info("3. Click on a payslip")
-            logger.info("4. Look for 'PayslipDownload' request")
-            logger.info("5. Copy the LoginToken from the request payload")
-            logger.info("6. Save it in .paybooks_token file")
-            
-            raise Exception("Failed to extract LoginToken - manual extraction required")
+            raise Exception("Failed to extract LoginToken automatically")
             
         finally:
             if driver:
