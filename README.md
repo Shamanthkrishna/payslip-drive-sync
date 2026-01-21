@@ -235,15 +235,26 @@ Run automatically on the 5th of each month:
 Pay Slips/
 ├── sync_payslips.py        # Main production script (run this)
 ├── setup.py                # One-time setup wizard
-├── paybooks_api.py         # API client with token extraction
-├── drive_uploader.py       # Google Drive integration
-├── config.py               # Configuration loader
+├── main.py                 # Legacy single-run script
 ├── requirements.txt        # Python dependencies
+├── README.md               # This file
 ├── .env                    # Your credentials (not in Git)
-├── credentials.json        # Google OAuth app (shared)
+├── .env.example            # Credentials template
+├── credentials.json        # Google OAuth app (not in Git)
 ├── token.json              # Your Google Drive token (auto-generated)
 ├── .paybooks_token         # Cached Paybooks token (auto-generated)
-└── local_payslips/         # Local backup folder
+├── .gitignore              # Git ignore rules
+├── src/                    # Core modules
+│   ├── paybooks_api.py     # API client with token extraction
+│   ├── drive_uploader.py   # Google Drive integration
+│   ├── email_notifier.py   # Email notifications
+│   └── config.py           # Configuration loader
+├── docs/                   # Documentation
+│   └── QUICKSTART.md       # Quick start guide
+├── tests/                  # Unit tests
+│   └── test_automation.py
+├── downloads/              # Temporary download folder
+└── logs/                   # Application logs
 ```
 
 ## Security
