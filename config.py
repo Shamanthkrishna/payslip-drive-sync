@@ -37,7 +37,7 @@ class Config:
     # Selenium settings
     HEADLESS_MODE = True  # Run browser in background
     DOWNLOAD_TIMEOUT = 60  # seconds to wait for download
-    PAGE_LOAD_TIMEOUT = 30  # seconds to wait for page load
+    PAGE_LOAD_TIMEOUT = 20  # seconds to wait for page load
     
     @classmethod
     def create_folders(cls):

@@ -10,7 +10,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
+import platform
 from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.os_manager import OperationSystemManager
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -39,6 +41,9 @@ class PaybooksScraper:
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--log-level=3')  # Suppress console errors
+        chrome_options.add_argument('--disable-logging')
+        chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
         
         # Set download directory
         prefs = {
@@ -51,8 +56,14 @@ class PaybooksScraper:
         chrome_options.add_experimental_option('prefs', prefs)
         
         # Initialize driver
-        service = Service(ChromeDriverManager().install())
-        self.driver = webdriver.Chrome(service=service, options=chrome_options)
+        try:
+            # Try using system ChromeDriver or let Selenium find it automatically
+            self.driver = webdriver.Chrome(options=chrome_options)
+        except Exception as e:
+            logger.warning(f"Default Chrome setup failed: {e}")
+            # Fallback to webdriver-manager
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
         self.driver.set_page_load_timeout(Config.PAGE_LOAD_TIMEOUT)
         
         logger.info("WebDriver setup complete")
@@ -64,32 +75,113 @@ class PaybooksScraper:
         
         try:
             # Wait for login page to load
-            wait = WebDriverWait(self.driver, 10)
+            wait = WebDriverWait(self.driver, 15)
+            time.sleep(2)  # Let page fully load
             
-            # Fill in login credentials
+            # Fill in login credentials in order: Login ID, Password, Domain
             logger.info("Entering login credentials...")
             
-            # Domain field
-            domain_field = wait.until(
-                EC.presence_of_element_located((By.ID, "txtDomainId"))
-            )
-            domain_field.clear()
-            domain_field.send_keys(Config.PAYBOOKS_DOMAIN)
+            # Try multiple possible selectors for each field
+            # Login ID field (first)
+            login_selectors = [
+                (By.ID, "txtUserId"),
+                (By.NAME, "txtUserId"),
+                (By.XPATH, "//input[@placeholder='User ID' or @placeholder='Login ID' or @type='text']"),
+            ]
             
-            # Login ID field
-            login_field = self.driver.find_element(By.ID, "txtUserId")
+            login_field = None
+            for by, selector in login_selectors:
+                try:
+                    login_field = wait.until(EC.presence_of_element_located((by, selector)))
+                    logger.info(f"Found login field with {by}: {selector}")
+                    break
+                except TimeoutException:
+                    continue
+            
+            if not login_field:
+                raise Exception("Could not find login ID field")
+            
             login_field.clear()
             login_field.send_keys(Config.PAYBOOKS_LOGIN_ID)
+            logger.info("Login ID entered")
             
-            # Password field
-            password_field = self.driver.find_element(By.ID, "txtPassword")
+            # Password field (second)
+            password_selectors = [
+                (By.ID, "txtPassword"),
+                (By.NAME, "txtPassword"),
+                (By.XPATH, "//input[@type='password']"),
+            ]
+            
+            password_field = None
+            for by, selector in password_selectors:
+                try:
+                    password_field = self.driver.find_element(by, selector)
+                    logger.info(f"Found password field with {by}: {selector}")
+                    break
+                except NoSuchElementException:
+                    continue
+            
+            if not password_field:
+                raise Exception("Could not find password field")
+            
             password_field.clear()
             password_field.send_keys(Config.PAYBOOKS_PASSWORD)
+            logger.info("Password entered")
+            
+            # Domain field (third)
+            domain_selectors = [
+                (By.ID, "txtDomain"),
+                (By.ID, "txtDomainId"),
+                (By.NAME, "txtDomain"),
+                (By.XPATH, "//input[@placeholder='Domain' or @placeholder='Company']"),
+            ]
+            
+            domain_field = None
+            for by, selector in domain_selectors:
+                try:
+                    domain_field = self.driver.find_element(by, selector)
+                    logger.info(f"Found domain field with {by}: {selector}")
+                    break
+                except NoSuchElementException:
+                    continue
+            
+            if not domain_field:
+                raise Exception("Could not find domain field")
+            
+            # Enter domain with retry logic
+            try:
+                domain_field.clear()
+                time.sleep(0.5)
+                domain_field.send_keys(Config.PAYBOOKS_DOMAIN)
+                logger.info("Domain entered")
+            except Exception as e:
+                logger.error(f"Failed to enter domain: {e}")
+                # Try clicking first then entering
+                domain_field.click()
+                time.sleep(0.5)
+                domain_field.send_keys(Config.PAYBOOKS_DOMAIN)
+                logger.info("Domain entered (after click)")
             
             # Click login button
-            login_button = self.driver.find_element(By.ID, "btnLogin")
-            login_button.click()
+            login_button_selectors = [
+                (By.ID, "btnLogin"),
+                (By.XPATH, "//button[@type='submit' or contains(text(), 'Login') or contains(text(), 'Sign In')]"),
+                (By.CSS_SELECTOR, "button[type='submit']"),
+            ]
             
+            login_button = None
+            for by, selector in login_button_selectors:
+                try:
+                    login_button = self.driver.find_element(by, selector)
+                    logger.info(f"Found login button with {by}: {selector}")
+                    break
+                except NoSuchElementException:
+                    continue
+            
+            if not login_button:
+                raise Exception("Could not find login button")
+            
+            login_button.click()
             logger.info("Login credentials submitted")
             
             # Wait for successful login (adjust selector based on actual homepage)
@@ -112,8 +204,11 @@ class PaybooksScraper:
             # Click on "Previous Month Payslip" button on homepage
             logger.info("Looking for previous month payslip button...")
             
-            # Try multiple possible selectors (adjust based on actual page structure)
+            # Try multiple possible selectors
             possible_selectors = [
+                (By.XPATH, "//div[@ng-click='viewPayslip(); $event.stopPropagation()']"),
+                (By.XPATH, "//div[contains(@ng-click, 'viewPayslip')]"),
+                (By.XPATH, "//div[contains(text(), 'payslip')]"),
                 (By.LINK_TEXT, "View Payslip"),
                 (By.PARTIAL_LINK_TEXT, "Payslip"),
                 (By.PARTIAL_LINK_TEXT, "Pay Slip"),
@@ -140,6 +235,10 @@ class PaybooksScraper:
             logger.info("Looking for download button...")
             
             download_selectors = [
+                (By.XPATH, "//a[@ng-click='fileDownloadClick()']"),
+                (By.XPATH, "//a[contains(@ng-click, 'fileDownloadClick')]"),
+                (By.XPATH, "//i[@class='fa fa-download']/ancestor::a"),
+                (By.XPATH, "//i[contains(@class, 'fa-download')]/ancestor::a"),
                 (By.LINK_TEXT, "Download"),
                 (By.PARTIAL_LINK_TEXT, "Download"),
                 (By.XPATH, "//a[contains(text(), 'Download')]"),
