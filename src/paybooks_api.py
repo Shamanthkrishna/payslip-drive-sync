@@ -146,7 +146,7 @@ class PaybooksAPI:
                     user_data = json.loads(user_info)
                     token = user_data.get('tokenKey')
                     if token:
-                        logger.info("✅ Extracted token from sessionStorage.userInfo.tokenKey")
+                        logger.info("[SUCCESS] Extracted token from sessionStorage.userInfo.tokenKey")
                         return token
             except Exception as e:
                 logger.debug(f"sessionStorage.userInfo failed: {e}")
@@ -155,7 +155,7 @@ class PaybooksAPI:
             try:
                 token = driver.execute_script("return localStorage.getItem('LoginToken');")
                 if token:
-                    logger.info("✅ Extracted token from localStorage")
+                    logger.info("[SUCCESS] Extracted token from localStorage")
                     return token
             except Exception as e:
                 logger.debug(f"localStorage failed: {e}")

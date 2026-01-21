@@ -111,20 +111,6 @@ def sync_all_payslips(max_months=24):
     try:
         Config.validate()
         
-        # Check if token exists before starting
-        if not Path('.paybooks_token').exists():
-            logger.warning("No token found!")
-            print("\n" + "="*70)
-            print("TOKEN REQUIRED")
-            print("="*70)
-            print("\nNo authentication token found.")
-            print("\nTo get your token:")
-            print("1. Run: python paste_token.py")
-            print("2. Follow the instructions to extract token from browser")
-            print("\nThis only needs to be done once per day (token lasts 24h)")
-            print("="*70 + "\n")
-            return
-        
         logger.info("="*70)
         logger.info("SMART PAYSLIP SYNC - PRODUCTION VERSION")
         logger.info("="*70)
@@ -189,14 +175,14 @@ def sync_all_payslips(max_months=24):
         logger.info(f"Skipped: {skipped_count} (already in Drive)")
         logger.info("="*70)
         
-        print(f"\n\u2705 Sync complete!")
+        print(f"\n[SUCCESS] Sync complete!")
         print(f"   Downloaded: {len(results)} payslips")
         print(f"   Uploaded: {uploaded_count} new files")
         print(f"   Skipped: {skipped_count} (duplicates)")
         
     except Exception as e:
-        logger.error(f"Sync failed: {e}", exc_info=True)
-        print(f"\n\u274c Error: {e}")
+        logging.error(f"Sync failed: {e}")
+        print(f"\n[ERROR] {e}")
         sys.exit(1)
 
 
