@@ -8,8 +8,8 @@ load_dotenv()
 class Config:
     """Application configuration"""
     
-    # Base paths
-    BASE_DIR = Path(__file__).parent
+    # Base paths - point to project root, not src/
+    BASE_DIR = Path(__file__).parent.parent
     DOWNLOAD_FOLDER = BASE_DIR / os.getenv('DOWNLOAD_FOLDER', 'downloads')
     LOG_FOLDER = BASE_DIR / 'logs'
     
