@@ -2,6 +2,10 @@
 
 Automated monthly pay slip downloader from Paybooks portal with Google Drive integration and email notifications.
 
+**🎯 For Employees**: Want to get started quickly? See **[QUICKSTART.md](QUICKSTART.md)** for a 15-minute setup guide!
+
+---
+
 ## 📋 Features
 
 - ✅ Automated login to Paybooks portal
@@ -11,6 +15,19 @@ Automated monthly pay slip downloader from Paybooks portal with Google Drive int
 - ✅ Email notifications (success/error/skip)
 - ✅ Comprehensive logging
 - ✅ Scheduled monthly execution via Windows Task Scheduler
+- ✅ **Reusable for any employee** - Just update credentials!
+
+## 👥 For Other Employees
+
+This tool is designed to be easily used by anyone in the organization:
+
+1. **Clone this repository** to your computer
+2. **Update `.env` file** with YOUR credentials (Login ID, Password, Domain)
+3. **Setup YOUR Google Drive** (follow setup guide)
+4. **Configure YOUR email** for notifications
+5. **Run and schedule** - Done!
+
+**Your credentials are private** - Never commit the `.env` file!
 
 ## 🏗️ Project Structure
 
@@ -30,13 +47,20 @@ payslip-drive-sync/
 └── logs/                   # Execution logs (auto-created)
 ```
 
-## 🚀 Setup Instructions
+## 🚀 Quick Start (For Employees)
 
-### Step 1: Clone and Install Dependencies
+### Prerequisites
+- Windows PC with Python 3.8+ installed ([Download Python](https://www.python.org/downloads/))
+- Google Chrome browser installed
+- Active Paybooks account
+- Personal Gmail account (for Google Drive)
+
+### Step 1: Clone Repository
 
 ```powershell
-# Navigate to project directory
-cd "d:\Shamanth_Krishna\Work\Personal\Pay Slips"
+# Clone to your preferred location
+git clone https://github.com/Shamanthkrishna/payslip-drive-sync.git
+cd payslip-drive-sync
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -51,18 +75,18 @@ Copy-Item .env.example .env
 
 2. Edit `.env` with your credentials:
 ```env
-# Paybooks Credentials
-PAYBOOKS_LOGIN_ID=1240901
-PAYBOOKS_PASSWORD=skb2025@paybook
-PAYBOOKS_DOMAIN=TISMO
+# Paybooks Credentials (replace with YOUR credentials)
+PAYBOOKS_LOGIN_ID=your_employee_id
+PAYBOOKS_PASSWORD=your_paybooks_password
+PAYBOOKS_DOMAIN=your_company_domain
 PAYBOOKS_URL=https://ess.paybooks.in/
 
 # Google Drive Settings
 GOOGLE_DRIVE_ROOT_FOLDER=Pay Slips
 
-# Email Notification Settings
-EMAIL_SENDER=your_email@gmail.com
-EMAIL_PASSWORD=your_app_password_here
+# Email Notification Settings (use YOUR Gmail)
+EMAIL_SENDER=your_personal_gmail@gmail.com
+EMAIL_PASSWORD=your_gmail_app_password
 EMAIL_RECIPIENT=your_work_email@company.com
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
@@ -143,22 +167,25 @@ python main.py
 
 #### Method 1: PowerShell Script (Recommended)
 
-1. Create a batch file `run_payslip_automation.bat`:
+1. Create a batch file `run_payslip_automation.bat` in the project folder:
 
 ```batch
 @echo off
-cd /d "d:\Shamanth_Krishna\Work\Personal\Pay Slips"
+cd /d "%~dp0"
 python main.py >> logs\scheduler.log 2>&1
 ```
+
+*Note: `%~dp0` automatically uses the batch file's directory*
 
 2. Create the scheduled task:
 
 ```powershell
-# Open Task Scheduler
+# Open Task Scheduler GUI
 taskschd.msc
 
-# Or use PowerShell to create task:
-$action = New-ScheduledTaskAction -Execute "d:\Shamanth_Krishna\Work\Personal\Pay Slips\run_payslip_automation.bat"
+# Or use PowerShell to create task (update the path to YOUR project location):
+$projectPath = "C:\path\to\your\payslip-drive-sync"  # UPDATE THIS
+$action = New-ScheduledTaskAction -Execute "$projectPath\run_payslip_automation.bat"
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 9:00AM -WeeksInterval 4
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType S4U
@@ -173,9 +200,9 @@ Register-ScheduledTask -TaskName "Payslip Drive Sync" -Action $action -Trigger $
 3. Name: `Payslip Drive Sync`
 4. Trigger: **Monthly** → Select day (e.g., 5th) → Select months: **All**
 5. Action: **Start a program**
-   - Program: `python.exe` (or full path: `C:\Python311\python.exe`)
-   - Arguments: `main.py`
-   - Start in: `d:\Shamanth_Krishna\Work\Personal\Pay Slips`
+   - Program: Full path to batch file (e.g., `C:\Users\YourName\payslip-drive-sync\run_payslip_automation.bat`)
+   - Leave Arguments empty
+   - Leave Start in empty (batch file handles it)
 6. Finish and test by right-clicking → **Run**
 
 ## 🧪 Testing & Troubleshooting
@@ -231,11 +258,18 @@ Get-ChildItem logs\
 
 ## 🔒 Security Best Practices
 
-1. **Never commit `.env` file** - Contains sensitive credentials
-2. **Keep `credentials.json` and `token.json` private** - Add to `.gitignore`
-3. **Use App Passwords** - Never use actual Gmail password
-4. **Regularly rotate credentials** - Update passwords periodically
-5. **Restrict Google Drive API scope** - Only uses `drive.file` (not full drive access)
+⚠️ **IMPORTANT FOR ALL USERS**:
+
+1. **NEVER share your `.env` file** - Contains YOUR personal credentials
+2. **NEVER commit `.env` to Git** - Already in `.gitignore`, but double-check
+3. **Use YOUR OWN Google account** - Don't share Google Drive credentials
+4. **Keep `credentials.json` and `token.json` private** - These are YOUR authentication files
+5. **Use Gmail App Passwords** - Never use your actual Gmail password
+6. **Each employee must do their own setup** - This tool is for individual use
+7. **Regularly rotate credentials** - Update passwords periodically
+8. **Restricted API scope** - Only uses `drive.file` (not full drive access)
+
+**Your credentials = Your privacy. Keep them safe!**
 
 ## 🛠️ Customization
 
@@ -308,5 +342,6 @@ For issues or questions, check the logs in `logs/` folder or review the error em
 
 ---
 
-**Repository**: `payslip-drive-sync`  
+**Repository**: [github.com/Shamanthkrishna/payslip-drive-sync](https://github.com/Shamanthkrishna/payslip-drive-sync)  
+**Quick Start**: [QUICKSTART.md](QUICKSTART.md) | **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)  
 **Description**: Python automation tool for downloading pay slips from web portals and syncing to Google Drive with scheduled execution
