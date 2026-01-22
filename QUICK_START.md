@@ -73,27 +73,40 @@ Send `PayslipDriveSync.zip` via:
 ### What Happens Next
 
 **Automatic Monthly Sync:**
-- Runs **every 6th of the month at 9:00 AM**
-- Only if your PC is on and you're logged in
-- Completely automatic - no action needed
-- Downloads payslips → Uploads to Google Drive
+- **Primary**: Runs every **6th of the month at 9:00 AM**
+- **Retry Logic**: If PC is off or you're not logged in:
+  - Retries at 11 AM, 1 PM, and 3 PM on the 6th
+  - Retries daily at 9 AM for the next 7 days (7th-12th)
+  - Completely automatic recovery
+- **Next Month**: Automatically resumes on the 6th regardless of previous failures
+- **Silent Operation**: Runs completely in background (no windows, no console)
 
-**If Your PC Was Off:**
-- Task Scheduler will try next time you log in
-- Or you can run manually (see below)
+**Smart Retry Examples:**
+- PC off on 6th at 9 AM? → Tries at 11 AM, 1 PM, 3 PM
+- Not logged in all day on 6th? → Tries 7th at 9 AM, 8th at 9 AM, etc.
+- On vacation 6th-10th? → Tries 11th at 9 AM, or 12th at 9 AM
+- All retries fail? → No problem! Next month it tries again on the 6th
+
+**Background Operation:**
+- No console windows pop up
+- No interruption to your work
+- Check logs anytime to see what happened
 
 ### Manual Sync Anytime
 
 You can also run the sync manually:
 
-**Method 1: Start Menu**
+**Method 1: Background Mode (Recommended)**
 - Click Start
-- Search "Payslip Drive Sync"
+- Search "Payslip Drive Sync (Background)"
 - Click the shortcut
+- Runs silently, check logs for results
 
-**Method 2: Installation Folder**
-- Go to `C:\Program Files\PayslipDriveSync`
-- Double-click `sync_payslips.py`
+**Method 2: Visible Console (Troubleshooting)**
+- Click Start
+- Search "Payslip Drive Sync (Show Log)"
+- Click the shortcut
+- Shows console output for debugging
 
 ### Check Logs
 
@@ -119,7 +132,17 @@ If you want to change when it runs:
 **A:** Yes, new payslips are available monthly. The tool runs on the 6th to ensure the new month's payslip is available.
 
 ### Q: What if I forget to turn on my PC on the 6th?
-**A:** The task will run the next time you log in, or you can run manually anytime.
+**A:** No problem! The system has smart retry logic:
+- Tries 4 times on the 6th (9 AM, 11 AM, 1 PM, 3 PM)
+- Tries daily for next 6 days (7th-12th at 9 AM)
+- Next month it automatically tries again on the 6th
+- You never "miss" a month permanently
+
+### Q: What if I'm on vacation for the whole week?
+**A:** The tool will try every day while you're gone. When you return and log in, it will run on the next scheduled time. Or you can run it manually anytime. Next month it resumes normal schedule.
+
+### Q: Will I see any windows or popups during automatic runs?
+**A:** No! Runs completely in background using `pythonw` (windowless Python). Silent operation, no interruptions.
 
 ### Q: Where are my payslips saved?
 **A:** Google Drive, in folder: `Pay Slips/YYYY/Month/`

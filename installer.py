@@ -323,19 +323,57 @@ See README.md for detailed instructions.
         info_file.write_text(info_text.format(install_path=self.install_path))
     
     def create_scheduled_task(self):
-        """Create Windows Task Scheduler task for monthly runs"""
+        """Create Windows Task Scheduler task for monthly runs with retry handling"""
         
         task_name = "PayslipDriveSync_Monthly"
         script_path = self.install_path / 'sync_payslips.py'
         
-        # PowerShell script to create scheduled task
+        # PowerShell script to create scheduled task with advanced retry logic
         ps_script = f'''
-$action = New-ScheduledTaskAction -Execute "python" -Argument '"{script_path}"' -WorkingDirectory "{self.install_path}"
-$trigger = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 6 -At 9am
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-$principal = New-ScheduledTaskPrincipal -UserId "$env:USERNAME" -LogonType Interactive
+# Main trigger: 6th of every month at 9:00 AM
+$trigger1 = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 6 -At 9am
 
-Register-ScheduledTask -TaskName "{task_name}" -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Automatically sync payslips from Paybooks to Google Drive on the 6th of every month" -Force
+# Backup triggers: Retry every 2 hours between 9 AM - 3 PM on the 6th
+$trigger2 = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 6 -At 11am
+$trigger3 = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 6 -At 1pm
+$trigger4 = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 6 -At 3pm
+
+# Additional daily triggers for next 7 days if missed on 6th
+$trigger5 = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 7 -At 9am
+$trigger6 = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 8 -At 9am
+$trigger7 = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 9 -At 9am
+$trigger8 = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 10 -At 9am
+$trigger9 = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 11 -At 9am
+$trigger10 = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 12 -At 9am
+
+# Background action - runs hidden with no console window
+$action = New-ScheduledTaskAction -Execute "pythonw" -Argument '"{script_path}"' -WorkingDirectory "{self.install_path}"
+
+# Advanced settings
+$settings = New-ScheduledTaskSettingsSet `
+    -AllowStartIfOnBatteries `
+    -DontStopIfGoingOnBatteries `
+    -StartWhenAvailable `
+    -RunOnlyIfNetworkAvailable `
+    -MultipleInstances IgnoreNew `
+    -ExecutionTimeLimit (New-TimeSpan -Hours 2) `
+    -RestartCount 3 `
+    -RestartInterval (New-TimeSpan -Minutes 10)
+
+# Run as current user (doesn't need admin rights)
+$principal = New-ScheduledTaskPrincipal -UserId "$env:USERNAME" -LogonType Interactive -RunLevel Limited
+
+# Create task with all triggers
+$task = Register-ScheduledTask `
+    -TaskName "{task_name}" `
+    -Action $action `
+    -Trigger @($trigger1, $trigger2, $trigger3, $trigger4, $trigger5, $trigger6, $trigger7, $trigger8, $trigger9, $trigger10) `
+    -Settings $settings `
+    -Principal $principal `
+    -Description "Automatically sync payslips from Paybooks to Google Drive. Runs on 6th of month with retry logic for 1 week. Completely silent background operation." `
+    -Force
+
+Write-Host "Task created successfully with retry handling"
 '''
         
         ps_file = self.install_path / 'create_task.ps1'
@@ -353,25 +391,41 @@ Register-ScheduledTask -TaskName "{task_name}" -Action $action -Trigger $trigger
                                   "The task will need to be created manually after installation.")
     
     def create_shortcuts(self):
-        """Create Start Menu shortcut"""
+        """Create Start Menu shortcuts for both visible and background runs"""
         
         try:
-            # Create shortcut script
-            vbs_script = f'''
+            # Create background shortcut (default - silent operation)
+            vbs_script_bg = f'''
 Set oWS = WScript.CreateObject("WScript.Shell")
-sLinkFile = "{os.environ['APPDATA']}\\Microsoft\\Windows\\Start Menu\\Programs\\Payslip Drive Sync.lnk"
+sLinkFile = "{os.environ['APPDATA']}\\Microsoft\\Windows\\Start Menu\\Programs\\Payslip Drive Sync (Background).lnk"
 Set oLink = oWS.CreateShortcut(sLinkFile)
-oLink.TargetPath = "python"
+oLink.TargetPath = "pythonw.exe"
 oLink.Arguments = ""{self.install_path / 'sync_payslips.py'}""
 oLink.WorkingDirectory = "{self.install_path}"
-oLink.Description = "Sync payslips from Paybooks to Google Drive"
+oLink.Description = "Sync payslips silently in background"
+oLink.WindowStyle = 7
 oLink.Save
 '''
-            vbs_file = self.install_path / 'create_shortcut.vbs'
-            vbs_file.write_text(vbs_script)
-            
+            vbs_file = self.install_path / 'create_shortcut_bg.vbs'
+            vbs_file.write_text(vbs_script_bg)
             subprocess.run(['cscript', '//nologo', str(vbs_file)], capture_output=True)
             vbs_file.unlink()
+            
+            # Create visible shortcut (optional - shows console for troubleshooting)
+            vbs_script_visible = f'''
+Set oWS = WScript.CreateObject("WScript.Shell")
+sLinkFile = "{os.environ['APPDATA']}\\Microsoft\\Windows\\Start Menu\\Programs\\Payslip Drive Sync (Show Log).lnk"
+Set oLink = oWS.CreateShortcut(sLinkFile)
+oLink.TargetPath = "python.exe"
+oLink.Arguments = ""{self.install_path / 'sync_payslips.py'}""
+oLink.WorkingDirectory = "{self.install_path}"
+oLink.Description = "Sync payslips with visible console output"
+oLink.Save
+'''
+            vbs_file2 = self.install_path / 'create_shortcut_visible.vbs'
+            vbs_file2.write_text(vbs_script_visible)
+            subprocess.run(['cscript', '//nologo', str(vbs_file2)], capture_output=True)
+            vbs_file2.unlink()
         except:
             pass  # Shortcut creation is optional
     
@@ -386,21 +440,31 @@ oLink.Save
 
 Installation Location: {self.install_path}
 
-✓ Application files installed
-✓ Credentials configured
-✓ Monthly automation scheduled (6th of every month at 9 AM)
+INSTALLED FEATURES:
+✓ Application files and dependencies
+✓ Credentials securely configured
+✓ Smart automatic scheduling with retry handling
+✓ Background operation (no console windows)
+✓ Start Menu shortcuts
+
+AUTOMATIC SCHEDULE:
+• Primary: 6th of every month at 9:00 AM
+• Retries: Every 2 hours (9 AM, 11 AM, 1 PM, 3 PM) on the 6th
+• Backup: Daily at 9 AM for next 7 days if missed
+• Runs completely in background (no popups/windows)
+• Automatically resumes next month if all retries fail
+
+MANUAL RUN:
+• Start Menu -> "Payslip Drive Sync (Background)" - Silent mode
+• Start Menu -> "Payslip Drive Sync (Show Log)" - Visible for troubleshooting
 
 IMPORTANT - Final Step:
-Before the automation works, you need to complete Google Drive setup:
+Complete Google Drive setup before first run:
 1. Get credentials.json from Google Cloud Console
 2. Place it in: {self.install_path}
 3. Run: python setup.py
 
-You can run the sync manually anytime from:
-• Start Menu → "Payslip Drive Sync"
-• Or: {self.install_path}\\sync_payslips.py
-
-Check logs in: {self.install_path}\\logs\\
+Logs: {self.install_path}\\logs\\payslip_YYYYMMDD.log
 """
         
         tk.Label(self.content, text=completion_text, 

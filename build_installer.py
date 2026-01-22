@@ -153,8 +153,8 @@ exe = EXE(
 ## Manual Run
 
 After installation, you can run the sync anytime:
-- Start Menu → "Payslip Drive Sync"
-- Or go to installation folder and run `sync_payslips.exe`
+- Start Menu -> "Payslip Drive Sync"
+- Or go to installation folder and run sync_payslips.exe
 
 ## Uninstall
 
@@ -162,10 +162,10 @@ Run the uninstaller from the installation folder or Add/Remove Programs.
 
 ## Support
 
-For issues, check the logs in: `%APPDATA%\\PayslipDriveSync\\logs\\`
+For issues, check the logs in: %APPDATA%\\PayslipDriveSync\\logs\\
 """
     
-    with open(dist_folder / 'README.txt', 'w') as f:
+    with open(dist_folder / 'README.txt', 'w', encoding='utf-8') as f:
         f.write(readme_content)
     
     print(f"\n{'=' * 70}")
