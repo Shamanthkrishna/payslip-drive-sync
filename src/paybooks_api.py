@@ -32,6 +32,9 @@ class PaybooksAPI:
         self.api_url = "https://apislip.paybooks.in/Payslip/PayslipDownload"
         self.download_folder = Config.DOWNLOAD_FOLDER
         self.token_file = Config.BASE_DIR / '.paybooks_token'
+        
+        # Ensure download folder exists
+        self.download_folder.mkdir(parents=True, exist_ok=True)
     
     def load_cached_token(self):
         """Load previously saved login token"""
@@ -327,6 +330,28 @@ class PaybooksAPI:
                             return None
                     else:
                         error_msg = payload_json.get('errorMessage', 'Unknown error')
+                        
+                        # Check if it's a token-related error (expired/invalid)
+                        # errorMessage is None when token is invalid
+                        if error_msg is None or error_msg in ['', 'Unknown error'] or 'token' in str(error_msg).lower():
+                            logger.warning(f"Token may be expired/invalid. Error: {error_msg}")
+                            # Try to refresh token once per batch
+                            if not getattr(self, '_token_refresh_attempted', False):
+                                self._token_refresh_attempted = True
+                                logger.info("Attempting to refresh token...")
+                                # Delete cached token
+                                token_file = Path('.paybooks_token')
+                                if token_file.exists():
+                                    token_file.unlink()
+                                self.login_token = None
+                                # Get new token
+                                if self.authenticate():
+                                    logger.info("Token refreshed successfully, retrying download...")
+                                    # Retry the download with new token
+                                    return self.download_payslip(month_date)
+                                else:
+                                    logger.error("Failed to refresh token")
+                        
                         logger.error(f"API returned error: {error_msg}")
                         return None
                         
@@ -374,6 +399,9 @@ class PaybooksAPI:
         if not self.login_token:
             if not self.authenticate():
                 raise Exception("Authentication failed")
+        
+        # Reset token refresh flag for this batch
+        self._token_refresh_attempted = False
         
         results = []
         current = datetime.now()
