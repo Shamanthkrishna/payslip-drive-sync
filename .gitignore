@@ -25,17 +25,24 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Logs
+# Logs and temporary files
 logs/
 *.log
-
-# Downloaded pay slips (temporary)
-downloads/
+*.png
 *.pdf
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
 
 # IDE
 .vscode/
@@ -48,6 +55,7 @@ downloads/
 .DS_Store
 Thumbs.db
 desktop.ini
+
 
 # Testing
 .pytest_cache/

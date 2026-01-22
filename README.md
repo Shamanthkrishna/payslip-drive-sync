@@ -1,36 +1,32 @@
 # Payslip Drive Sync
 
-Automatically download payslips from Paybooks and upload to Google Drive with zero manual intervention.
+**Automatically download payslips from Paybooks and upload to Google Drive with zero manual intervention.**
 
-## Quick Start
+## 🚀 Quick Start
 
 ```bash
 # 1. First-time setup (one command)
 python setup.py
 
-# 2. Get authentication token (once per day)
-python paste_token.py
-# Follow the on-screen instructions to get token from browser
-
-# 3. Sync payslips (run monthly or anytime)
+# 2. Sync payslips (run monthly or anytime)
 python sync_payslips.py
 ```
 
 That's it! The tool will:
-- **First run**: Download ALL missing payslips from your employment start date
-- **Subsequent runs**: Check your Drive and download only missing months
+- **Automatically extract** authentication token (no manual copy-paste!)
+- **Smart sync**: Check Drive and download only missing payslips
 - **Auto-upload**: Organize in Drive as `Pay Slips/YYYY/MonthName/`
-- **Token**: Lasts 24 hours, re-run `paste_token.py` when expired
+- **Auto-refresh**: Token expires? Automatically refreshes it!
 
-## Features
+## ✨ Features
 
-✅ **Simple Token Setup**: One-time daily token paste (instructions provided)  
-✅ **Smart Sync**: Scans Drive, downloads only missing payslips  
-✅ **Bulk Initial Download**: Gets all historical payslips on first run  
-✅ **Fast API**: 10x faster than web scraping (~1 sec per payslip)  
-✅ **Auto-Organization**: Year/Month folder structure on Drive  
-✅ **Duplicate Prevention**: Never downloads the same payslip twice  
-✅ **Daily Logging**: All runs logged to single daily file  
+- **100% Automatic** - No manual token extraction, no manual steps
+- **Smart Sync** - Scans Drive, downloads only missing payslips
+- **Fast API** - 10x faster than web scraping (~1 sec per payslip)
+- **Auto-Organization** - Year/Month folder structure on Drive
+- **Duplicate Prevention** - Never downloads the same payslip twice
+- **Auto Token Refresh** - Detects expired tokens and refreshes automatically
+- **Daily Logging** - All runs logged to single daily file  
 
 ## Installation
 
@@ -169,31 +165,34 @@ You should now have:
 
 ## How It Works
 
-1. **Token Extraction**: 
-   - Opens Chrome to Paybooks login page
-   - Intercepts the API authentication token automatically
+1. **Automatic Token Extraction**: 
+   - Opens Chrome in headless mode (no visible window)
+   - Logs in to Paybooks with credentials from `.env`
+   - Extracts authentication token from browser session storage
    - Caches token for 24 hours (`.paybooks_token`)
+   - Auto-refreshes when token expires
 
 2. **Smart Sync**:
    - Scans your Google Drive folder structure
-   - Identifies which months are already downloaded
-   - Calculates missing months since employment start
-   - Downloads only missing payslips via API
+   - Identifies which months already have payslips
+   - Downloads only missing months via fast API
+   - Handles errors gracefully and retries with fresh token
 
 3. **Upload**:
    - Creates folder structure: `Pay Slips/YYYY/MonthName/`
-   - Uploads as `payslip_MMYY.pdf`
-   - Keeps local backup in `local_payslips/`
+   - Uploads as `MonthName_YYYY_PaySlip.pdf`
+   - Skips files that already exist in Drive
+   - Provides links to uploaded files
 
 ## Troubleshooting
 
-### Chrome doesn't open / Token extraction fails
+### Token extraction fails
 
-**Solution**: Make sure Chrome is installed and not currently running. Close all Chrome windows and try again.
+**Solution**: Ensure Chrome is installed. The tool uses headless Chrome to automatically extract the token. No action needed from you.
 
-### "Token expired" error
+### "API returned error: None"
 
-**Solution**: Delete `.paybooks_token` file and run again. The tool will extract a fresh token.
+**Solution**: Token expired. The tool will automatically detect this and refresh the token. Just run the script again.
 
 ### "File already exists" when uploading
 

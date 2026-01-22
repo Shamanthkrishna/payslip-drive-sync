@@ -440,9 +440,9 @@ if __name__ == "__main__":
         file = api.download_latest_payslip()
         
         if file:
-            print(f"\n✅ Success! Downloaded: {file}")
+            print(f"\n[SUCCESS] Downloaded: {file}")
         else:
-            print(f"\n❌ Download failed - check logs")
+            print(f"\n[ERROR] Download failed - check logs")
             
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n[ERROR] {e}")

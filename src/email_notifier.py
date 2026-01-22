@@ -54,7 +54,7 @@ class EmailNotifier:
     
     def notify_success(self, month_year, file_name, drive_url=None):
         """Send success notification"""
-        subject = f"✅ Pay Slip Downloaded - {month_year}"
+        subject = f"[SUCCESS] Pay Slip Downloaded - {month_year}"
         
         body = f"""
 Pay Slip Automation - Success
@@ -75,7 +75,7 @@ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     def notify_error(self, error_message, month_year=None):
         """Send error notification"""
         month_info = f" - {month_year}" if month_year else ""
-        subject = f"❌ Pay Slip Automation Failed{month_info}"
+        subject = f"[ERROR] Pay Slip Automation Failed{month_info}"
         
         body = f"""
 Pay Slip Automation - Error
@@ -145,6 +145,6 @@ if __name__ == "__main__":
     result = notifier.send_test_email()
     
     if result:
-        print("✅ Test email sent successfully!")
+        print("[SUCCESS] Test email sent successfully!")
     else:
-        print("❌ Failed to send test email. Check your configuration.")
+        print("[ERROR] Failed to send test email. Check your configuration.")

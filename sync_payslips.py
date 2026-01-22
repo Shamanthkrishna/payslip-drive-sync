@@ -161,7 +161,7 @@ def sync_all_payslips(max_months=24):
             upload_result = uploader.upload_file(filepath, month_date)
             
             if upload_result:
-                logger.info(f"  \u2713 {month_name} uploaded successfully")
+                logger.info(f"  [OK] {month_name} uploaded successfully")
                 uploaded_count += 1
             else:
                 logger.info(f"  - {month_name} already exists - skipped")

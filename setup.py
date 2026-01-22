@@ -60,7 +60,7 @@ def setup_credentials():
     if env_file.exists():
         response = input("\n.env file already exists. Overwrite? (y/N): ").strip().lower()
         if response != 'y':
-            print("\u2713 Using existing .env file")
+            print("[OK] Using existing .env file")
             return
     
     print("\nPlease enter your Paybooks credentials:")
