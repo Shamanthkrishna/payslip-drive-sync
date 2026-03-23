@@ -214,16 +214,32 @@ You should now have:
 
 ### Windows Task Scheduler
 
-Run automatically on the 5th of each month:
+Use the built-in scheduler setup script (recommended):
 
-1. Open Task Scheduler
-2. Create Basic Task
-3. Name: "Payslip Sync"
-4. Trigger: Monthly, Day 5
-5. Action: Start a program
-   - Program: `C:\Path\To\Python\python.exe`
-   - Arguments: `sync_payslips.py`
-   - Start in: `D:\Shamanth_Krishna\Work\Personal\Pay Slips`
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup_windows_schedule.ps1
+```
+
+Default behavior after setup:
+- Runs in background daily at `09:00`
+- Actual sync executes only between monthly days `6` to `12`
+- Skips automatically once current month is successfully synced
+- Task Scheduler retries failed runs 3 times every 30 minutes
+- Script retries each run 3 times with 20-minute delays
+
+To customize time/window/retries:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup_windows_schedule.ps1 `
+   -RunAt "09:00" -WindowStartDay 6 -WindowEndDay 12 `
+   -Attempts 3 -RetryDelayMin 20
+```
+
+You can run the scheduled runner manually anytime:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_scheduled_sync.ps1
+```
 
 ### Linux/Mac (cron)
 

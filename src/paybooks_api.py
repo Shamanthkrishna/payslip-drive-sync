@@ -10,6 +10,7 @@ import base64
 import json
 import logging
 import time
+import re
 from pathlib import Path
 from datetime import datetime
 import requests
@@ -41,11 +42,11 @@ class PaybooksAPI:
         try:
             if self.token_file.exists():
                 token_data = json.loads(self.token_file.read_text())
-                # Check if token is not too old (24 hours)
+                # Check if token is not too old (configurable)
                 saved_time = datetime.fromisoformat(token_data['timestamp'])
                 age_hours = (datetime.now() - saved_time).total_seconds() / 3600
                 
-                if age_hours < 24:
+                if age_hours < Config.PAYBOOKS_TOKEN_CACHE_HOURS:
                     self.login_token = token_data['token']
                     logger.info(f"Loaded cached token (age: {age_hours:.1f} hours)")
                     return True
@@ -71,29 +72,83 @@ class PaybooksAPI:
     def get_login_token_via_browser(self):
         """Use Selenium to login and extract the LoginToken automatically"""
         logger.info("Logging in to extract API token...")
+
+        def parse_token_from_text(raw_text):
+            if not raw_text:
+                return None
+
+            patterns = [
+                r'"LoginToken"\s*:\s*"([^"]{20,})"',
+                r'"tokenKey"\s*:\s*"([^"]{20,})"',
+                r'LoginToken=([^&\s;]{20,})',
+                r'Bearer\s+([A-Za-z0-9_\-\.]{20,})',
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, raw_text)
+                if match:
+                    return match.group(1)
+            return None
+
+        def extract_token_from_performance_logs(local_driver):
+            try:
+                perf_logs = local_driver.get_log('performance')
+            except Exception:
+                return None
+
+            for entry in perf_logs:
+                try:
+                    message = json.loads(entry.get('message', '{}')).get('message', {})
+                    params = message.get('params', {})
+                    request = params.get('request', {})
+
+                    # Check request headers for token-bearing values.
+                    for value in request.get('headers', {}).values():
+                        token = parse_token_from_text(str(value))
+                        if token:
+                            return token
+
+                    # Check request payload/query-like strings.
+                    token = parse_token_from_text(request.get('postData', ''))
+                    if token:
+                        return token
+
+                    token = parse_token_from_text(request.get('url', ''))
+                    if token:
+                        return token
+
+                except Exception:
+                    continue
+
+            return None
         
         driver = None
         try:
             # Setup Chrome in headless mode for automatic extraction
             chrome_options = Options()
-            chrome_options.add_argument('--headless=new')
+            if Config.HEADLESS_MODE:
+                chrome_options.add_argument('--headless=new')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
             chrome_options.add_argument('--log-level=3')
             chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
+            chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
             
             # Enable performance logging to capture network requests
             chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
             
             driver = webdriver.Chrome(options=chrome_options)
             driver.set_page_load_timeout(30)
+            driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+                'source': "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            })
             
             # Navigate and login
             logger.info(f"Navigating to {Config.PAYBOOKS_URL}")
             driver.get(Config.PAYBOOKS_URL)
             
             wait = WebDriverWait(driver, 20)
-            time.sleep(2)
             
             # Fill login form - try multiple field name variations
             try:
@@ -135,109 +190,106 @@ class PaybooksAPI:
                     login_button = driver.find_element(By.XPATH, "//button[@type='submit' or text()='Login' or text()='Sign In']")
             
             login_button.click()
-            
-            # Wait for login
-            time.sleep(5)
-            
-            logger.info("Login successful, extracting token...")
-            
-            # Method 1: Check sessionStorage.userInfo for tokenKey (PRIMARY METHOD)
-            try:
-                user_info = driver.execute_script("return sessionStorage.getItem('userInfo');")
-                if user_info:
-                    import json
-                    user_data = json.loads(user_info)
-                    token = user_data.get('tokenKey')
-                    if token:
-                        logger.info("[SUCCESS] Extracted token from sessionStorage.userInfo.tokenKey")
-                        return token
-            except Exception as e:
-                logger.debug(f"sessionStorage.userInfo failed: {e}")
-            
-            # Method 2: Check localStorage first
-            try:
-                token = driver.execute_script("return localStorage.getItem('LoginToken');")
-                if token:
-                    logger.info("[SUCCESS] Extracted token from localStorage")
-                    return token
-            except Exception as e:
-                logger.debug(f"localStorage failed: {e}")
-            
-            # Method 2: Check sessionStorage
-            try:
-                token = driver.execute_script("return sessionStorage.getItem('LoginToken');")
-                if token:
-                    logger.info("Extracted token from sessionStorage")
-                    return token
-            except Exception as e:
-                logger.debug(f"sessionStorage failed: {e}")
-            
-            # Method 3: Try to get from Angular scope (Paybooks uses AngularJS)
-            try:
-                script = """
-                var token = null;
-                try {
-                    // Try to get from angular scope
-                    var scope = angular.element(document.body).scope();
-                    if (scope && scope.LoginToken) {
-                        token = scope.LoginToken;
-                    } else if (scope && scope.$root && scope.$root.LoginToken) {
-                        token = scope.$root.LoginToken;
-                    }
-                    
-                    // Try localStorage with all keys
-                    if (!token) {
-                        for (var i = 0; i < localStorage.length; i++) {
-                            var key = localStorage.key(i);
-                            if (key && key.toLowerCase().includes('token')) {
-                                token = localStorage.getItem(key);
-                                if (token && token.length > 20) break;
+            logger.info("Login submitted, waiting for token...")
+
+            token_probe_script = """
+            try {
+                let token = null;
+
+                const userInfoRaw = sessionStorage.getItem('userInfo') || localStorage.getItem('userInfo');
+                if (userInfoRaw) {
+                    try {
+                        const userInfo = JSON.parse(userInfoRaw);
+                        token = userInfo.tokenKey || userInfo.LoginToken || userInfo.token;
+                    } catch (_) {}
+                }
+
+                if (!token) {
+                    token = sessionStorage.getItem('LoginToken') || localStorage.getItem('LoginToken');
+                }
+
+                if (!token) {
+                    for (let i = 0; i < sessionStorage.length; i++) {
+                        const key = sessionStorage.key(i);
+                        if (key && key.toLowerCase().includes('token')) {
+                            const value = sessionStorage.getItem(key);
+                            if (value && value.length > 20) {
+                                token = value;
+                                break;
                             }
                         }
                     }
-                    
-                    // Try sessionStorage with all keys
-                    if (!token) {
-                        for (var i = 0; i < sessionStorage.length; i++) {
-                            var key = sessionStorage.key(i);
-                            if (key && key.toLowerCase().includes('token')) {
-                                token = sessionStorage.getItem(key);
-                                if (token && token.length > 20) break;
+                }
+
+                if (!token) {
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && key.toLowerCase().includes('token')) {
+                            const value = localStorage.getItem(key);
+                            if (value && value.length > 20) {
+                                token = value;
+                                break;
                             }
                         }
                     }
-                } catch(e) {}
+                }
+
                 return token;
-                """
-                token = driver.execute_script(script)
+            } catch (_) {
+                return null;
+            }
+            """
+
+            token = None
+            deadline = time.time() + 20
+            while time.time() < deadline:
+                token = driver.execute_script(token_probe_script)
                 if token:
-                    logger.info("Extracted token from Angular scope")
+                    logger.info("[SUCCESS] Extracted login token")
                     return token
-            except Exception as e:
-                logger.debug(f"Angular scope failed: {e}")
-            
-            # Method 4: Navigate to payslip page and check again
+
+                token = extract_token_from_performance_logs(driver)
+                if token:
+                    logger.info("[SUCCESS] Extracted token from network logs")
+                    return token
+
+                time.sleep(0.5)
+
+            # Some sessions need one route change before token is populated.
+            logger.info("Token not found yet, trying payslip route once...")
             try:
-                logger.info("Navigating to payslip page...")
                 driver.get("https://apps.paybooks.in/#!/payslip")
-                time.sleep(3)
-                
-                token = driver.execute_script("return localStorage.getItem('LoginToken') || sessionStorage.getItem('LoginToken');")
+                token = driver.execute_script(token_probe_script)
                 if token:
-                    logger.info("Extracted token after navigation")
+                    logger.info("[SUCCESS] Extracted token after payslip route navigation")
+                    return token
+
+                token = extract_token_from_performance_logs(driver)
+                if token:
+                    logger.info("[SUCCESS] Extracted token from network logs after route navigation")
                     return token
             except Exception as e:
-                logger.debug(f"Navigation attempt failed: {e}")
-            
-            # Method 5: Check all cookies
+                logger.debug(f"Route navigation attempt failed: {e}")
+
+            # Final fallback: token in cookies
             try:
-                cookies = driver.get_cookies()
-                for cookie in cookies:
+                for cookie in driver.get_cookies():
                     if 'token' in cookie['name'].lower() and len(cookie['value']) > 20:
-                        logger.info(f"Extracted token from cookie: {cookie['name']}")
+                        logger.info(f"[SUCCESS] Extracted token from cookie: {cookie['name']}")
                         return cookie['value']
             except Exception as e:
                 logger.debug(f"Cookie check failed: {e}")
+
+            # Helpful diagnostics for future troubleshooting.
+            try:
+                current_url = driver.current_url
+                local_keys = driver.execute_script("return Object.keys(localStorage);")
+                session_keys = driver.execute_script("return Object.keys(sessionStorage);")
+                logger.error(f"Token extraction diagnostics - URL: {current_url}")
+                logger.error(f"Token extraction diagnostics - localStorage keys: {local_keys}")
+                logger.error(f"Token extraction diagnostics - sessionStorage keys: {session_keys}")
+            except Exception:
+                pass
             
             # If all methods fail
             logger.error("Could not automatically extract token")
@@ -340,7 +392,7 @@ class PaybooksAPI:
                                 self._token_refresh_attempted = True
                                 logger.info("Attempting to refresh token...")
                                 # Delete cached token
-                                token_file = Path('.paybooks_token')
+                                token_file = self.token_file
                                 if token_file.exists():
                                     token_file.unlink()
                                 self.login_token = None

@@ -46,54 +46,46 @@ def get_existing_payslips_from_drive(uploader):
     existing_months = set()
     
     try:
-        # Get the root Pay Slips folder
-        root_folder_id = uploader.get_folder_id("Pay Slips", uploader.drive_service.files(), None)
-        if not root_folder_id:
+        service = uploader.service
+
+        # Find root folder by configured name.
+        root_query = (
+            f"name='{Config.GOOGLE_DRIVE_ROOT_FOLDER}' and "
+            "mimeType='application/vnd.google-apps.folder' and trashed=false"
+        )
+        root_results = service.files().list(q=root_query, fields="files(id, name)").execute()
+        root_folders = root_results.get('files', [])
+        if not root_folders:
             return existing_months
-        
-        # Get all year folders
-        query = f"'{root_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
-        results = uploader.drive_service.files().list(
-            q=query,
-            fields="files(id, name)"
-        ).execute()
-        
-        year_folders = results.get('files', [])
-        
-        for year_folder in year_folders:
+
+        root_folder_id = root_folders[0]['id']
+
+        # Get all year folders.
+        year_query = f"'{root_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        year_results = service.files().list(q=year_query, fields="files(id, name)").execute()
+
+        for year_folder in year_results.get('files', []):
             year = year_folder['name']
             if not year.isdigit():
                 continue
-            
-            # Get all month folders in this year
-            query = f"'{year_folder['id']}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
-            results = uploader.drive_service.files().list(
-                q=query,
-                fields="files(id, name)"
-            ).execute()
-            
-            month_folders = results.get('files', [])
-            
-            for month_folder in month_folders:
+
+            month_query = f"'{year_folder['id']}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            month_results = service.files().list(q=month_query, fields="files(id, name)").execute()
+
+            for month_folder in month_results.get('files', []):
                 month_name = month_folder['name']
-                
-                # Check if this folder has any PDF files
-                query = f"'{month_folder['id']}' in parents and mimeType='application/pdf' and trashed=false"
-                results = uploader.drive_service.files().list(
-                    q=query,
-                    fields="files(id, name)"
-                ).execute()
-                
-                if results.get('files', []):
-                    # Parse month and year to datetime
+                pdf_query = f"'{month_folder['id']}' in parents and mimeType='application/pdf' and trashed=false"
+                pdf_results = service.files().list(q=pdf_query, fields="files(id)").execute()
+
+                if pdf_results.get('files', []):
                     try:
                         month_date = datetime.strptime(f"{month_name} {year}", "%B %Y")
                         existing_months.add(month_date)
-                    except:
-                        pass
-        
+                    except ValueError:
+                        logging.debug(f"Skipping non-standard month folder: {month_name} {year}")
+
         return existing_months
-        
+
     except Exception as e:
         logging.error(f"Failed to get existing payslips from Drive: {e}")
         return existing_months
@@ -141,7 +133,7 @@ def sync_all_payslips(max_months=24):
         if not results:
             logger.info("All payslips are up to date!")
             print("\n\u2705 All payslips are up to date!")
-            return
+            return True
         
         logger.info(f"\nSuccessfully downloaded {len(results)} new payslips")
         
@@ -179,11 +171,12 @@ def sync_all_payslips(max_months=24):
         print(f"   Downloaded: {len(results)} payslips")
         print(f"   Uploaded: {uploaded_count} new files")
         print(f"   Skipped: {skipped_count} (duplicates)")
+        return True
         
     except Exception as e:
         logging.error(f"Sync failed: {e}")
         print(f"\n[ERROR] {e}")
-        sys.exit(1)
+        return False
 
 
 if __name__ == "__main__":
@@ -201,4 +194,6 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    sync_all_payslips(args.max_months)
+    success = sync_all_payslips(args.max_months)
+    if not success:
+        sys.exit(1)

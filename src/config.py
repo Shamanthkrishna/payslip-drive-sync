@@ -35,9 +35,10 @@ class Config:
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     
     # Selenium settings
-    HEADLESS_MODE = True  # Run browser in background
+    HEADLESS_MODE = os.getenv('HEADLESS_MODE', 'true').lower() == 'true'
     DOWNLOAD_TIMEOUT = 60  # seconds to wait for download
     PAGE_LOAD_TIMEOUT = 20  # seconds to wait for page load
+    PAYBOOKS_TOKEN_CACHE_HOURS = int(os.getenv('PAYBOOKS_TOKEN_CACHE_HOURS', 72))
     
     @classmethod
     def create_folders(cls):
