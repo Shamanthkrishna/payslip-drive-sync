@@ -459,7 +459,10 @@ class PaybooksAPI:
         current = datetime.now()
         
         for i in range(1, num_months + 1):
-            month_date = current - relativedelta(months=i)
+            # Normalize to 1st of month, midnight so comparison with skip_existing set works
+            month_date = (current - relativedelta(months=i)).replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
             
             # Skip if already exists in Drive
             if skip_existing and month_date in skip_existing:

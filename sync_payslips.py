@@ -38,10 +38,12 @@ def setup_logging():
 
 def get_existing_payslips_from_drive(uploader):
     """
-    Get list of months that already have payslips in Google Drive
-    
+    Get list of months that already have payslips in Google Drive.
+    Supports both the new flat structure (Pay Slips/YYYY/MonthName_YYYY_PaySlip.pdf)
+    and the legacy structure (Pay Slips/YYYY/MonthName/MonthName_YYYY_PaySlip.pdf).
+
     Returns:
-        Set of datetime objects representing months with existing payslips
+        Set of datetime objects (normalized to 1st of month) representing months with existing payslips
     """
     existing_months = set()
     
@@ -69,15 +71,38 @@ def get_existing_payslips_from_drive(uploader):
             if not year.isdigit():
                 continue
 
-            month_query = f"'{year_folder['id']}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
-            month_results = service.files().list(q=month_query, fields="files(id, name)").execute()
+            # --- New flat structure: PDFs directly in year folder ---
+            pdf_query = (
+                f"'{year_folder['id']}' in parents and "
+                "mimeType='application/pdf' and trashed=false"
+            )
+            pdf_results = service.files().list(q=pdf_query, fields="files(id, name)").execute()
+            for pdf_file in pdf_results.get('files', []):
+                filename = pdf_file['name']  # e.g. "January_2026_PaySlip.pdf"
+                try:
+                    month_date = datetime.strptime(
+                        filename.replace('_PaySlip.pdf', ''), "%B_%Y"
+                    )
+                    existing_months.add(month_date)
+                except ValueError:
+                    logging.debug(f"Skipping non-standard file: {filename}")
 
+            # --- Legacy structure: month subfolders inside year folder ---
+            month_query = (
+                f"'{year_folder['id']}' in parents and "
+                "mimeType='application/vnd.google-apps.folder' and trashed=false"
+            )
+            month_results = service.files().list(q=month_query, fields="files(id, name)").execute()
             for month_folder in month_results.get('files', []):
                 month_name = month_folder['name']
-                pdf_query = f"'{month_folder['id']}' in parents and mimeType='application/pdf' and trashed=false"
-                pdf_results = service.files().list(q=pdf_query, fields="files(id)").execute()
-
-                if pdf_results.get('files', []):
+                pdf_in_month_query = (
+                    f"'{month_folder['id']}' in parents and "
+                    "mimeType='application/pdf' and trashed=false"
+                )
+                pdf_in_month = service.files().list(
+                    q=pdf_in_month_query, fields="files(id)"
+                ).execute()
+                if pdf_in_month.get('files', []):
                     try:
                         month_date = datetime.strptime(f"{month_name} {year}", "%B %Y")
                         existing_months.add(month_date)
@@ -150,7 +175,9 @@ def sync_all_payslips(max_months=24):
             
             logger.info(f"Uploading {month_name}...")
             
-            upload_result = uploader.upload_file(filepath, month_date)
+            # Skip the existence check: these months were already confirmed absent
+            # by get_existing_payslips_from_drive(), avoiding a redundant Drive API call.
+            upload_result = uploader.upload_file(filepath, month_date, check_exists=False)
             
             if upload_result:
                 logger.info(f"  [OK] {month_name} uploaded successfully")

@@ -103,13 +103,13 @@ class DriveUploader:
     
     def get_folder_structure(self, previous_month_date):
         """
-        Create folder structure: Pay Slips/YYYY/Month_Name/
-        Returns the folder ID of the target folder
+        Create folder structure: Pay Slips/YYYY/
+        Month is encoded in the filename, no month subfolder needed.
+        Returns the folder ID of the year folder.
         """
         year = previous_month_date.strftime('%Y')
-        month_name = previous_month_date.strftime('%B')  # Full month name (e.g., "December")
         
-        logger.info(f"Setting up folder structure for {month_name} {year}")
+        logger.info(f"Setting up folder structure for {year}")
         
         # Create/find root folder
         root_folder_id = None
@@ -119,10 +119,7 @@ class DriveUploader:
         # Create/find year folder
         year_folder_id = self.find_or_create_folder(year, root_folder_id)
         
-        # Create/find month folder
-        month_folder_id = self.find_or_create_folder(month_name, year_folder_id)
-        
-        return month_folder_id
+        return year_folder_id
     
     def file_exists(self, file_name, folder_id):
         """Check if file already exists in the folder"""
@@ -147,10 +144,17 @@ class DriveUploader:
             logger.error(f"Error checking file existence: {e}")
             return False
     
-    def upload_file(self, local_file_path, previous_month_date):
+    def upload_file(self, local_file_path, previous_month_date, check_exists=True):
         """
-        Upload file to Google Drive with proper folder structure
-        Returns True if successful, False if file already exists or error
+        Upload file to Google Drive with proper folder structure.
+        Returns True if successful, False if file already exists or error.
+
+        Args:
+            local_file_path: Path to the local PDF file
+            previous_month_date: datetime for the payslip month
+            check_exists: When False, skips the Drive existence check (use when
+                          caller has already confirmed the file is new via the
+                          Drive scan, avoiding a redundant API call).
         """
         try:
             local_file = Path(local_file_path)
@@ -165,8 +169,8 @@ class DriveUploader:
             month_year = previous_month_date.strftime('%B_%Y')
             new_filename = f"{month_year}_PaySlip.pdf"
             
-            # Check if file already exists
-            if self.file_exists(new_filename, folder_id):
+            # Check if file already exists (skipped when caller already confirmed absence)
+            if check_exists and self.file_exists(new_filename, folder_id):
                 logger.warning(f"File already exists in Google Drive: {new_filename}")
                 return False
             

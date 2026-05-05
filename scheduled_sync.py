@@ -16,6 +16,7 @@ import logging
 from datetime import datetime
 
 from src.config import Config
+from src.email_notifier import EmailNotifier
 from sync_payslips import sync_all_payslips, setup_logging
 
 
@@ -82,6 +83,16 @@ def run_scheduled(max_months, attempts, retry_delay_minutes, window_start_day, w
             time.sleep(retry_delay_minutes * 60)
 
     logger.error("Scheduled sync failed after all retry attempts")
+    try:
+        notifier = EmailNotifier()
+        notifier.notify_error(
+            f"Scheduled payslip sync failed after {attempts} attempt(s) for {month_key}.\n"
+            f"Retry delay was {retry_delay_minutes} minute(s) between attempts.\n\n"
+            f"Please check the logs or run sync_payslips.py manually.",
+            month_year=month_key,
+        )
+    except Exception as email_err:
+        logger.warning(f"Could not send failure notification email: {email_err}")
     return 1
 
 
