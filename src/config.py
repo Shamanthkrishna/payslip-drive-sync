@@ -21,8 +21,8 @@ class Config:
     
     # Google Drive settings
     GOOGLE_DRIVE_ROOT_FOLDER = os.getenv('GOOGLE_DRIVE_ROOT_FOLDER', 'Pay Slips')
-    CREDENTIALS_FILE = BASE_DIR / 'credentials.json'
-    TOKEN_FILE = BASE_DIR / 'token.json'
+    CREDENTIALS_FILE = BASE_DIR / 'auth' / 'credentials.json'
+    TOKEN_FILE = BASE_DIR / 'auth' / 'token.json'
     
     # Email notification settings
     EMAIL_SENDER = os.getenv('EMAIL_SENDER')

@@ -9,7 +9,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-Set-Location -Path $PSScriptRoot
+
+# Resolve project root (one level above this scripts/ folder)
+$root = Split-Path $PSScriptRoot -Parent
+Set-Location -Path $root
 
 $runScript = Join-Path $PSScriptRoot 'run_scheduled_sync.ps1'
 if (-not (Test-Path $runScript)) {

@@ -32,7 +32,7 @@ class PaybooksAPI:
         self.session = requests.Session()
         self.api_url = "https://apislip.paybooks.in/Payslip/PayslipDownload"
         self.download_folder = Config.DOWNLOAD_FOLDER
-        self.token_file = Config.BASE_DIR / '.paybooks_token'
+        self.token_file = Config.BASE_DIR / 'auth' / '.paybooks_token'
         
         # Ensure download folder exists
         self.download_folder.mkdir(parents=True, exist_ok=True)

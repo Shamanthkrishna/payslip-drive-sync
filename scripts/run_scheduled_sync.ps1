@@ -7,10 +7,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-Set-Location -Path $PSScriptRoot
 
-$pythonw = Join-Path $PSScriptRoot '.venv\Scripts\pythonw.exe'
-$python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+# Resolve the project root (one level above this scripts/ folder)
+$root = Split-Path $PSScriptRoot -Parent
+Set-Location -Path $root
+
+$pythonw = Join-Path $root '.venv\Scripts\pythonw.exe'
+$python  = Join-Path $root '.venv\Scripts\python.exe'
 
 if (Test-Path $pythonw) {
     $py = $pythonw
